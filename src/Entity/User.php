@@ -43,10 +43,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'json')]
     private array $roles = [];
 
-    #[ORM\Column]
+    #[ORM\Column(type: 'decimal', scale: 2, nullable: true)]
     private ?float $balance = null;
 
-   
     public function getId(): ?int
     {
         return $this->id;
@@ -146,9 +145,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setBalance(float $balance): static
     {
         $this->balance = $balance;
-
         return $this;
     }
-
-   
 }

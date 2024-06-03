@@ -1,55 +1,66 @@
 <?php
 
-
 namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
+use App\Entity\User;
 
-/**
- * @ORM\Entity(repositoryClass="App\Repository\SessionRepository")
- */
+#[ORM\Entity(repositoryClass: "App\Repository\SessionRepository")]
 class Session
 {
-    /**
-     * @ORM\Id
-     * @ORM\Column(type="string")
-     */
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column(type: "integer")]
     private $id;
 
-    /**
-     * @ORM\Column(type="json")
-     */
-    private $data = [];
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(nullable: false)]
+    private $user;
 
-    /**
-     * @ORM\Column(type="datetime")
-     */
-    private $createdAt;
+    #[ORM\Column(length: 255)]
+    #[Assert\NotBlank]
+    private ?string $sessionToken = null;
 
-    public function __construct()
-    {
-        $this->createdAt = new \DateTimeImmutable();
-    }
+    #[ORM\Column(type: "datetime")]
+    private $expirationDate;
 
-    public function getId(): ?string
+    // Getters and Setters
+    public function getId(): ?int
     {
         return $this->id;
     }
 
-    public function getData(): ?array
+    public function getUser(): ?User
     {
-        return $this->data;
+        return $this->user;
     }
 
-    public function setData(array $data): self
+    public function setUser(?User $user): self
     {
-        $this->data = $data;
-
+        $this->user = $user;
         return $this;
     }
 
-    public function getCreatedAt(): ?\DateTimeInterface
+    public function getSessionToken(): ?string
     {
-        return $this->createdAt;
+        return $this->sessionToken;
+    }
+
+    public function setSessionToken(string $sessionToken): self
+    {
+        $this->sessionToken = $sessionToken;
+        return $this;
+    }
+
+    public function getExpirationDate(): ?\DateTimeInterface
+    {
+        return $this->expirationDate;
+    }
+
+    public function setExpirationDate(\DateTimeInterface $expirationDate): self
+    {
+        $this->expirationDate = $expirationDate;
+        return $this;
     }
 }

@@ -2,65 +2,73 @@
 
 namespace App\Controller;
 
+use App\Entity\User;
+use App\Entity\Session;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Annotation\Route;
-use Doctrine\ORM\EntityManagerInterface;
-use App\Entity\User;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
-use App\Security\SessionToken;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\Routing\Annotation\Route;
 
+#[Route('/login', name: 'login', methods: ['POST'])]
 class LoginController extends AbstractController
 {
     private EntityManagerInterface $entityManager;
-    private TokenStorageInterface $tokenStorage;
+    private UserPasswordHasherInterface $passwordHasher;
 
-    public function __construct(EntityManagerInterface $entityManager, TokenStorageInterface $tokenStorage)
+    public function __construct(EntityManagerInterface $entityManager, UserPasswordHasherInterface $passwordHasher)
     {
         $this->entityManager = $entityManager;
-        $this->tokenStorage = $tokenStorage;
+        $this->passwordHasher = $passwordHasher;
     }
 
-    #[Route('/login', name: 'login', methods: ['POST'])]
-    public function login(Request $request): JsonResponse
+    public function signIn(Request $request): JsonResponse
     {
-        $data = json_decode($request->getContent(), true);
+        $requestData = json_decode($request->getContent(), true);
+        $username = $requestData['username'];
+        $password = $requestData['password'];
 
-        if (empty($data['username']) || empty($data['password'])) {
-            return $this->json([
-                'message' => 'Invalid credentials',
-            ], Response::HTTP_UNAUTHORIZED);
+        $user = $this->entityManager->getRepository(User::class)->findOneBy(['username' => $username]);
+
+        if ($user && $this->passwordHasher->isPasswordValid($user, $password)) {
+            $sessionToken = bin2hex(random_bytes(32));
+            $expirationDate = new \DateTime();
+            $expirationDate->modify("+360 minutes");
+
+            $session = new Session();
+            $session->setUser($user);
+            $session->setSessionToken($sessionToken);
+            $session->setExpirationDate($expirationDate);
+
+            $this->entityManager->persist($session);
+            $this->entityManager->flush();
+
+            return $this->json(['message' => 'Login successful', 'sessionToken' => $sessionToken]);
         }
 
-        $user = $this->entityManager->getRepository(User::class)->findOneBy(['username' => $data['username']]);
-
-        if (!$user || !password_verify($data['password'], $user->getPassword())) {
-            return $this->json([
-                'message' => 'Invalid credentials',
-            ], Response::HTTP_UNAUTHORIZED);
-        }
-
-        // Generate session token
-        $sessionToken = $this->generateSessionToken();
-
-        // Create a custom session token
-        $token = new SessionToken($sessionToken);
-
-        // Store session token in the token storage
-        $this->tokenStorage->setToken($token);
-
-        return $this->json([
-            'message' => 'Login successful',
-            'session_token' => $sessionToken,
-            'username' => $user->getUsername(),
-        ], Response::HTTP_OK);
+        return $this->json(['error' => 'Invalid username or password'], 401);
     }
 
-    private function generateSessionToken(): string
+    #[Route('/checkcredential', name: 'check_credential', methods: ['POST'])]
+    public function checkCredential(Request $request): JsonResponse
     {
-        // Generate a unique session token (you can use JWT, UUID, or any other method)
-        return bin2hex(random_bytes(32)); // Example: Generating a random hex token
+        $requestData = json_decode($request->getContent(), true);
+        $sessionToken = $requestData['sessionToken'];
+
+        $session = $this->entityManager->getRepository(Session::class)->findOneBy(['sessionToken' => $sessionToken]);
+
+        if ($session) {
+            $currentDate = new \DateTime();
+            if ($session->getExpirationDate() > $currentDate) {
+                // Optionally, you can also return the user details
+                $user = $session->getUser();
+                return $this->json(['message' => 'Authenticated', 'user' => $user]);
+            } else {
+                return $this->json(['error' => 'Session expired'], 401);
+            }
+        }
+
+        return $this->json(['error' => 'Invalid session token'], 400);
     }
 }

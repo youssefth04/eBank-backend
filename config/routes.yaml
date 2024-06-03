@@ -13,3 +13,11 @@ app_transfer_send_money:
     path: /send-money
     methods: [POST]
     controller: App\Controller\TransferController::sendMoney
+check_credential:
+    path: /checkcredential
+    controller: App\Controller\LoginController::checkCredential
+    methods: [POST]
+login:
+    path: /login
+    controller: App\Controller\LoginController::signIn
+    methods: [POST]
