@@ -2,13 +2,15 @@
 
 namespace App\Controller;
 
-use App\Entity\User; 
+use App\Entity\User;
+use App\Entity\Session;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 class TransferController extends AbstractController
 {
@@ -24,31 +26,45 @@ class TransferController extends AbstractController
     #[Route('/send-money', name: 'send_money', methods: ['POST'])]
     public function sendMoney(Request $request): JsonResponse
     {
-        $data = json_decode($request->getContent(), true);
-
-        // Set default senderEmail if not provided
-        if (empty($data['senderEmail'])) {
+        // Get the session token from the Authorization header
+        $authHeader = $request->headers->get('Authorization');
+        if (!$authHeader || !preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            return new JsonResponse(['error' => 'Missing or invalid Authorization header'], 401);
         }
+
+        $sessionToken = $matches[1];
+        
+        // Find the session by token
+        $session = $this->entityManager->getRepository(Session::class)->findOneBy(['sessionToken' => $sessionToken]);
+        if (!$session) {
+            return new JsonResponse(['error' => 'Invalid session token'], 401);
+        }
+
+        // Get the authenticated user
+        $user = $session->getUser();
+        if (!$user) {
+            throw new AccessDeniedException('User not authenticated');
+        }
+
+        $data = json_decode($request->getContent(), true);
 
         // Log the received payload
         $this->logger->info('Received payload: ' . json_encode($data));
 
+        // Validate required fields
         if (empty($data['receiver'])) {
             return new JsonResponse(['error' => 'Missing receiver field'], 400);
         }
         if (empty($data['amount'])) {
             return new JsonResponse(['error' => 'Missing amount field'], 400);
         }
-        if (empty($data['currency'])) {
-            return new JsonResponse(['error' => 'Missing currency field'], 400);
-        }
 
         try {
-            $sender = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $data['senderEmail']]);
-            $receiver = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $data['receiver']]);
+            $sender = $user;
+            $receiver = $this->entityManager->getRepository(User::class)->findOneBy(['username' => $data['receiver']]);
 
-            if (!$sender || !$receiver) {
-                throw new \Exception('Invalid sender or receiver');
+            if (!$receiver) {
+                throw new \Exception('Invalid receiver');
             }
 
             $this->logger->info('Sender balance: ' . $sender->getBalance());

@@ -54,10 +54,15 @@ class LoginController extends AbstractController
     public function checkCredential(Request $request): JsonResponse
     {
         $requestData = json_decode($request->getContent(), true);
+    
+        if (!isset($requestData) || !is_array($requestData) || !isset($requestData['sessionToken'])) {
+            return $this->json(['error' => 'Invalid request data'], 400);
+        }
+    
         $sessionToken = $requestData['sessionToken'];
-
+    
         $session = $this->entityManager->getRepository(Session::class)->findOneBy(['sessionToken' => $sessionToken]);
-
+    
         if ($session) {
             $currentDate = new \DateTime();
             if ($session->getExpirationDate() > $currentDate) {
@@ -68,7 +73,7 @@ class LoginController extends AbstractController
                 return $this->json(['error' => 'Session expired'], 401);
             }
         }
-
+    
         return $this->json(['error' => 'Invalid session token'], 400);
     }
 }
