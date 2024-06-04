@@ -24,6 +24,9 @@ class SignupController extends AbstractController
             ->setLastName($data['lastName'])
             ->setUsername($data['username'])
             ->setEmail($data['email'])
+            ->setBalance('0')
+
+
             ->setPassword($passwordHasher->hashPassword($user, $data['password']));
 
         $errors = $validator->validate($user);
